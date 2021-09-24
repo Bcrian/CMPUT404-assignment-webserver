@@ -1,5 +1,7 @@
 #  coding: utf-8 
 import socketserver
+import os
+import webbrowser
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -32,6 +34,49 @@ class MyWebServer(socketserver.BaseRequestHandler):
     def handle(self):
         self.data = self.request.recv(1024).strip()
         print ("Got a request of: %s\n" % self.data)
+
+        request_msg = self.data.decode()
+        if request_msg == None:
+            self.request.send("HTTP/1.1 400 Bad Request \n".encode())
+        else:
+            (method, path) = (request_msg.split()[0], request_msg.split()[1])
+            if method != 'GET':
+                self.request.send("HTTP/1.1 405 Method Not Allowed\n\n".encode('utf-8'))
+            else:
+                redirected = False
+                if os.path.exists("./www" + path + '/index.html'):
+                    path += '/index.html'
+                    redirected = True
+                if path == '/':
+                    path = '/index.html'
+                elif path.endswith('/'):
+                    path += 'index.html'
+                
+                try:
+                    file = open("./www" + path, 'rb')
+                    response = file.read()
+                    file.close()
+
+                    header = 'HTTP/1.1 200 OK\n'
+                    if path.endswith(".html"):
+                        mimetype = 'text/html'
+                    elif path.endswith(".css"):
+                        mimetype = 'text/css'
+                    
+                    if redirected:
+                        header = 'HTTP/1.1 301 Moved Permanently\n' + \
+                            'Content-Type: ' + str(mimetype) + '\n\n'
+                    else:
+                        header += 'Content-Type: ' + str(mimetype) + '\n\n'
+                except Exception as e:
+                    header = 'HTTP/1.1 404 Not Found\n\n'
+                    response = None
+                
+                final_response = header.encode('utf-8')
+                if response:
+                    final_response += response
+                self.request.send(final_response)
+        
         self.request.sendall(bytearray("OK",'utf-8'))
 
 if __name__ == "__main__":
